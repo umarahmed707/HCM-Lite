@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  HR
+  EMPLOYEE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  HALF_DAY
+  ABSENT
+  MISSING_CHECKOUT
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  CASUAL
+  UNPAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model User {
+  id             String     @id @default(uuid())
+  email          String     @unique
+  passwordHash   String
+  role           Role
+  mustChangePass Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  employeeProfile Employee?
+  auditLogs       AuditLog[] @relation("Actor")
+}
+
+model CompanySetting {
+  id                 String   @id @default("1")
+  companyName        String
+  officeStart        String   @default("09:00")
+  graceMinutes       Int      @default(15)
+  halfDayHours       Float    @default(5.0)
+  weekendDays        String[] @default(["Saturday", "Sunday"])
+  officeLat          Float?
+  officeLng          Float?
+  officeRadiusMeters Float?   @default(150)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Department {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  employees Employee[]
+}
+
+model Designation {
+  id        String     @id @default(uuid())
+  title     String     @unique
+  employees Employee[]
+}
+
+model Employee {
+  id            String      @id @default(uuid())
+  userId        String      @unique
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode  String      @unique
+  firstName     String
+  lastName      String
+  phone         String?
+  address       String?
+  departmentId  String
+  department    Department  @relation(fields: [departmentId], references: [id])
+  designationId String
+  designation   Designation @relation(fields: [designationId], references: [id])
+  basicSalary   Float
+  joinDate      DateTime    @default(now())
+
+  attendances   Attendance[]
+  leaveRequests LeaveRequest[]
+  payslips      Payslip[]
+}
+
+model Attendance {
+  id         String           @id @default(uuid())
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime         @db.Date
+  checkIn    DateTime?
+  checkOut   DateTime?
+  status     AttendanceStatus
+  source     String           @default("web")
+  createdAt  DateTime         @default(now())
+
+  @@unique([employeeId, date])
+}
+
+model LeaveRequest {
+  id         String      @id @default(uuid())
+  employeeId String
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType  LeaveType
+  startDate  DateTime    @db.Date
+  endDate    DateTime    @db.Date
+  daysCount  Int
+  reason     String
+  status     LeaveStatus @default(PENDING)
+  comment    String?
+  createdAt  DateTime    @default(now())
+}
+
+model PayrollRun {
+  id          String    @id @default(uuid())
+  month       Int
+  year        Int
+  isFinalized Boolean   @default(false)
+  totalGross  Float
+  totalNet    Float
+  createdAt   DateTime  @default(now())
+  payslips    Payslip[]
+
+  @@unique([month, year])
+}
+
+model Payslip {
+  id           String     @id @default(uuid())
+  payrollRunId String
+  payrollRun   PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employeeId   String
+  employee     Employee   @relation(fields: [employeeId], references: [id])
+  basicSalary  Float
+  hra          Float
+  medical      Float
+  grossSalary  Float
+  deductions   Float
+  tax          Float
+  netSalary    Float
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String
+  actor     User     @relation("Actor", fields: [actorId], references: [id])
+  action    String
+  entity    String
+  details   Json?
+  createdAt DateTime @default(now())
+}
+
+model AiLog {
+  id        String   @id @default(uuid())
+  userId    String
+  prompt    String
+  toolUsed  String?
+  createdAt DateTime @default(now())
+}
