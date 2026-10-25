@@ -59,54 +59,79 @@ export const firstRunSetup = async (req, res) => {
   }
 };
 
-// User Login
+
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Email space remove aur lowercase karein
-    const cleanEmail = email ? email.trim().toLowerCase() : '';
+    const cleanEmail = email?.trim().toLowerCase();
+
+    if (!cleanEmail || !password) {
+      return res.status(400).json({
+        error: "Email and password are required",
+      });
+    }
 
     const user = await prisma.user.findUnique({
       where: { email: cleanEmail },
-      include: { employeeProfile: true }
+      include: { employeeProfile: true },
     });
 
+    // Debug: password ya hash print mat karna
+    console.log("Login email:", cleanEmail);
+    console.log("User found:", Boolean(user));
+
     if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({
+        error: "Invalid email or password",
+      });
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    const isMatch = await bcrypt.compare(
+      password,
+      user.passwordHash
+    );
+
+    console.log("Password matched:", isMatch);
+
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({
+        error: "Invalid email or password",
+      });
     }
-
-    // ... baaki payload aur token logic
 
     const payload = {
       userId: user.id,
-      employeeId: user.employeeProfile ? user.employeeProfile.id : null,
+      employeeId: user.employeeProfile
+        ? user.employeeProfile.id
+        : null,
       role: user.role,
-      email: user.email
+      email: user.email,
     };
 
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1d' });
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
 
-    res.json({
-      message: 'Login successful',
+    return res.json({
+      message: "Login successful",
       token,
       user: {
         id: user.id,
         email: user.email,
         role: user.role,
         mustChangePass: user.mustChangePass,
-        employeeProfile: user.employeeProfile
-      }
+        employeeProfile: user.employeeProfile,
+      },
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Login error:", error.message);
+    return res.status(500).json({
+      error: "Internal server error",
+    });
   }
 };
+
 
 // Change Password (Required on First Login for HR/Employees)
 export const changePassword = async (req, res) => {
